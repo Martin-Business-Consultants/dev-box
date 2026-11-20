@@ -197,12 +197,12 @@ vim.api.nvim_create_autocmd('TermOpen', { command = 'setlocal nonumber norelativ
 
 -- ============================ Treesitter ============================
 vim.g.ts_langs = {
-  'bash', 'css', 'diff', 'dockerfile', 'embedded_template', 'git_config', 'gitcommit',
+  'bash', 'css', 'diff', 'dockerfile', 'embedded_template', 'git_config',
   'html', 'javascript', 'jsdoc', 'json', 'lua', 'luadoc', 'markdown', 'markdown_inline',
   'query', 'regex', 'ruby', 'sql', 'toml', 'tsx', 'typescript', 'vim', 'vimdoc', 'yaml',
 }
 if #vim.api.nvim_list_uis() > 0 then
-  require('nvim-treesitter').install(vim.g.ts_langs) -- async; no-op when installed
+  require('nvim-treesitter').install(vim.g.ts_langs, { max_jobs = 1 }) -- async; no-op when installed
 end
 vim.api.nvim_create_autocmd('FileType', {
   callback = function(ev)
