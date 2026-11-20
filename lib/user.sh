@@ -50,10 +50,25 @@ step_dotfiles() {
     git config -f "$HOME/.gitconfig.local" user.name "$GIT_NAME"
     git config -f "$HOME/.gitconfig.local" user.email "$GIT_EMAIL"
   fi
+  setup_gh_credentials
 
   backup_conflicts "${STOW_FLAT[@]}" "${STOW_FOLDED[@]}"
   stow -d "$DOTFILES" -t "$HOME" --restow --no-folding "${STOW_FLAT[@]}"
   stow -d "$DOTFILES" -t "$HOME" --restow "${STOW_FOLDED[@]}"
+}
+
+# Use gh as git's GitHub credential helper. Lives in ~/.gitconfig.local and
+# points at the mise shim, because `gh auth login` would otherwise write a
+# gh-version-specific path into the shared, stowed ~/.gitconfig.
+setup_gh_credentials() {
+  local local_cfg="$HOME/.gitconfig.local" host key
+  local helper="!$HOME/.local/share/mise/shims/gh auth git-credential"
+  for host in https://github.com https://gist.github.com; do
+    key="credential.$host.helper"
+    git config -f "$local_cfg" --unset-all "$key" || true
+    git config -f "$local_cfg" --add "$key" ""   # clear inherited helpers
+    git config -f "$local_cfg" --add "$key" "$helper"
+  done
 }
 
 # Move real files that would block stow (e.g. Debian's default ~/.bashrc)
