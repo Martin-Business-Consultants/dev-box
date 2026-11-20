@@ -1,0 +1,7 @@
+[tools]
+node = "latest"
+ruby = "latest"
+"npm:opencode-ai" = "latest"
+
+[settings]
+ruby.compile = false   # precompiled Ruby only; never fall back to ruby-build
