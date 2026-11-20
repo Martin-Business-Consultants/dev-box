@@ -2,6 +2,7 @@
 node = "latest"
 ruby = "latest"
 neovim = "latest"
+gh = "latest"
 # aqua = prebuilt binaries (mise runs npm with --ignore-scripts, which breaks
 # npm packages that download a binary in postinstall)
 "aqua:anomalyco/opencode" = "latest"

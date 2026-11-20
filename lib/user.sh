@@ -89,7 +89,7 @@ step_neovim() {
 
 step_versions() {
   local tool
-  for tool in mise node ruby nvim opencode claude; do
+  for tool in mise node ruby nvim gh opencode claude; do
     printf '  %-9s %s\n' "$tool" "$(mise exec -- "$tool" --version 2>/dev/null | head -1 || echo '?')"
   done
 }

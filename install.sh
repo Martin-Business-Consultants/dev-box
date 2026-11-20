@@ -48,7 +48,7 @@ Next steps:
   1. In a NEW terminal, confirm login:  ssh ${NEW_USER}@$(hostname)
   2. Only then close this root session.
   3. Reboot if the kernel was upgraded: sudo reboot
-  4. Run 'claude' and 'opencode' once to sign in.
+  4. Sign in: 'gh auth login', then run 'claude' and 'opencode' once.
 EOF
 }
 

@@ -1,6 +1,6 @@
 # remote-dev
 
-Turns a fresh Debian 13 VPS into a hardened remote dev box: Tailscale, Claude Code,
+Turns a fresh Debian 13 VPS into a hardened remote dev box: Tailscale, GitHub CLI, Claude Code,
 opencode, mise (Node + Ruby), and a Neovim 0.12 IDE built on `vim.pack` + mini.nvim.
 Dotfiles are managed with GNU stow.
 
