@@ -1,6 +1,6 @@
-[user]
-	name = Ted Martin
-	email = etmartinkazoo@gmail.com
+# Name/email live in ~/.gitconfig.local (written by install.sh, not in the repo)
+[include]
+	path = ~/.gitconfig.local
 [init]
 	defaultBranch = main
 [pull]
