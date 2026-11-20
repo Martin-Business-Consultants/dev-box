@@ -2,7 +2,7 @@
 
 PACKAGES=(
   sudo curl ca-certificates gnupg git stow tmux mosh htop unzip xz-utils
-  ripgrep fd-find locales
+  ripgrep fd-find locales btop fastfetch
   ufw fail2ban python3-systemd
   unattended-upgrades apt-listchanges needrestart
   build-essential pkg-config

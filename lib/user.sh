@@ -11,6 +11,9 @@ user_env() {
   DOTFILES="$HOME/dotfiles"
   export PATH="$HOME/.local/bin:$PATH"
   export MISE_YES=1
+  # sudo -u doesn't set these; `systemctl --user` (rex server install) needs them
+  export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+  export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 }
 
 # Use GIT_NAME/GIT_EMAIL from env, else the user's existing config, else ask.

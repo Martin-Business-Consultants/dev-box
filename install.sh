@@ -21,8 +21,8 @@ for lib in "$ROOT"/lib/*.sh; do source "$lib"; done
 : "${GIT_EMAIL:=}"           # prompted if empty
 # ------------------------------------------------------------
 
-SYSTEM_STEPS=(packages locale swap kernel journald auto_updates user fail2ban sshd tailscale firewall repo)
-USER_STEPS=(dotfiles mise claude neovim versions)
+SYSTEM_STEPS=(packages locale swap kernel journald auto_updates user fail2ban sshd tailscale firewall rex repo)
+USER_STEPS=(dotfiles mise claude rex_server neovim versions)
 
 run_step() {
   local step=$1
@@ -49,6 +49,7 @@ Next steps:
   2. Only then close this root session.
   3. Reboot if the kernel was upgraded: sudo reboot
   4. Sign in: 'gh auth login', then run 'claude' and 'opencode' once.
+  5. In Rex on your Mac: Settings > Remote Hosts > ssh://${NEW_USER}@$(hostname)
 EOF
 }
 

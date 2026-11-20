@@ -1,6 +1,6 @@
 # remote-dev
 
-Turns a fresh Debian 13 VPS into a hardened remote dev box: Tailscale, GitHub CLI, Claude Code,
+Turns a fresh Debian 13 VPS into a hardened remote dev box: Tailscale, Rex server, GitHub CLI, Claude Code,
 opencode, mise (Node + Ruby), and a Neovim 0.12 IDE built on `vim.pack` + mini.nvim.
 Dotfiles are managed with GNU stow.
 
@@ -39,9 +39,9 @@ sudo ~/dotfiles/install.sh tailscale firewall
 
 ## Steps
 
-System (root): `packages locale swap kernel journald auto_updates user fail2ban sshd tailscale firewall repo`
+System (root): `packages locale swap kernel journald auto_updates user fail2ban sshd tailscale firewall rex repo`
 
-User (`NEW_USER`): `dotfiles mise claude neovim versions`
+User (`NEW_USER`): `dotfiles mise claude rex_server neovim versions`
 
 ## Layout
 
@@ -52,6 +52,7 @@ lib/              step functions, grouped by area
   system.sh       packages, locale, swap, sysctl, journald, auto-updates
   security.sh     user, SSH keys, sshd, fail2ban
   network.sh      Tailscale, ufw
+  rex.sh          Rex server (persistent sessions for the Rex app)
   user.sh         dotfiles, mise, Claude Code, Neovim
 system/           config templates installed under /etc (@VAR@ placeholders)
 bash/ git/ mise/ nvim/   stow packages linked into $HOME
