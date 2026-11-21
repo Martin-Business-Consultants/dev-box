@@ -4,6 +4,31 @@ Turns a fresh Debian 13 VPS into a hardened remote dev box: Tailscale, Rex serve
 opencode, mise (Node + Ruby), and a Neovim 0.12 IDE built on `vim.pack` + mini.nvim.
 Dotfiles are managed with GNU stow.
 
+## Create a box with one command
+
+`bin/box` does the cloud-init steps below for you: it makes a single-use Tailscale key, fills in
+`cloud-init.yaml` (your username, git name and email, and timezone from this machine), creates the
+droplet and waits for it to join your tailnet. It needs `curl`, `jq` and two tokens in your
+environment, kept in your password manager and never committed:
+
+- `DIGITALOCEAN_ACCESS_TOKEN`: DigitalOcean > API > Generate New Token, custom scopes `droplet`
+  (create, read, delete) and `tag` (create).
+- `TAILSCALE_API_KEY`: Tailscale admin console > Settings > Keys > Generate access token.
+
+```bash
+bin/box new my-dev                     # 1 GB dev box, ready in about 15 minutes
+bin/box list                           # boxes made with bin/box
+bin/box destroy my-dev                 # deletes the droplet and removes it from the tailnet
+```
+
+Any other cloud-init file with `KEY="..."` lines works too. `new` fills each from the environment,
+and lists what it filled before creating anything:
+
+```bash
+RUNWELL_TOKEN=… CLAUDE_CODE_OAUTH_TOKEN=… GH_TOKEN=… \
+  bin/box new runner-1 --tag runner --size s-1vcpu-2gb --user-data ../runwell-runner-box/cloud-init.yaml
+```
+
 ## Create a box with cloud-init
 
 The box sets itself up on first boot. You never log in as root, and once it's done the only way in
@@ -74,6 +99,7 @@ User (`NEW_USER`): `dotfiles mise claude rex_server neovim versions`
 ```
 install.sh        entrypoint: config, step order, root/user dispatch
 cloud-init.yaml   user data that runs install.sh on a new droplet
+bin/box           creates and destroys droplets that use it
 lib/              step functions, grouped by area
   common.sh       helpers: log, ask, render, run_installer…
   system.sh       packages, locale, timezone, swap, zram, earlyoom, sysctl, journald, auto-updates

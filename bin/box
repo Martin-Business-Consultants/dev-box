@@ -1,0 +1,218 @@
+#!/usr/bin/env bash
+# Create and destroy DigitalOcean boxes that set themselves up with cloud-init and join your tailnet.
+#   bin/box new NAME [options]   create a box and wait for it to join the tailnet
+#   bin/box destroy NAME [--yes] delete the droplet and remove it from the tailnet
+#   bin/box list                 boxes made with this script
+# Needs curl, jq, DIGITALOCEAN_ACCESS_TOKEN and TAILSCALE_API_KEY. Runs on macOS's bash 3.2 too.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BOX_TAG=box
+
+: "${BOX_REGION:=nyc3}"
+: "${BOX_SIZE:=s-1vcpu-1gb}"
+: "${BOX_IMAGE:=debian-13-x64}"
+
+log()  { printf '\033[1;32m==> %s\033[0m\n' "$*"; }
+die()  { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
+has()  { command -v "$1" >/dev/null 2>&1; }
+
+usage() {
+  cat <<EOF
+Usage:
+  box new NAME [--size SLUG] [--region SLUG] [--tag TAG] [--user-data FILE]
+  box destroy NAME [--yes]
+  box list
+
+new fills in the user data's KEY="..." lines from your environment, then creates the droplet:
+  NEW_USER     default: your username here
+  GIT_NAME     default: git config user.name
+  GIT_EMAIL    default: git config user.email
+  TIMEZONE     default: this machine's timezone
+  TS_AUTHKEY   made for you: single use, pre-approved, expires in an hour
+  ...and any other KEY set in the environment, e.g. a runner box's credentials. It lists
+  what it filled before creating the droplet; check that no personal token slipped in.
+
+--user-data  cloud-init file (default: this repo's cloud-init.yaml)
+--tag TAG    tags the Tailscale key tag:TAG and the droplet TAG
+Defaults: --size $BOX_SIZE, --region $BOX_REGION, image $BOX_IMAGE (BOX_SIZE, BOX_REGION, BOX_IMAGE).
+EOF
+}
+
+# api METHOD URL TOKEN [JSON]: the response body, or the error and a failure.
+api() {
+  local response args=(-sS --fail-with-body -X "$1" -H "Authorization: Bearer $3" -H "Content-Type: application/json")
+  [[ -z ${4:-} ]] || args+=(--data "$4")
+  response=$(curl "${args[@]}" "$2") || die "$1 $2 failed: $response"
+  printf '%s' "$response"
+}
+do_api() { api "$1" "https://api.digitalocean.com/v2$2" "$DIGITALOCEAN_ACCESS_TOKEN" "${3:-}"; }
+ts_api() { api "$1" "https://api.tailscale.com/api/v2$2" "$TAILSCALE_API_KEY" "${3:-}"; }
+
+require() {
+  has curl || die "Needs curl."
+  has jq || die "Needs jq (brew install jq, or apt install jq)."
+  [[ -n ${DIGITALOCEAN_ACCESS_TOKEN:-} ]] || die "Set DIGITALOCEAN_ACCESS_TOKEN (DigitalOcean > API > Tokens)."
+  [[ -n ${TAILSCALE_API_KEY:-} ]] || die "Set TAILSCALE_API_KEY (Tailscale admin console > Settings > Keys)."
+}
+
+valid_name() {
+  [[ $1 =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "Box names use lowercase letters, digits and dashes: '$1'."
+}
+
+# tailnet_ids NAME: ids of the tailnet devices whose MagicDNS name is NAME.
+tailnet_ids() {
+  ts_api GET /tailnet/-/devices | jq -r --arg n "$1" '.devices[] | select((.name | split(".")[0]) == $n) | .id'
+}
+
+droplet_ids() {
+  do_api GET "/droplets?name=$1" | jq -r '.droplets[].id'
+}
+
+# render FILE: print FILE with each KEY="..." line set from $KEY, when KEY is set in the environment.
+render() {
+  local line key indent
+  while IFS= read -r line || [[ -n $line ]]; do
+    if [[ $line =~ ^([[:space:]]*)([A-Z_][A-Z0-9_]*)=\" ]]; then
+      indent=${BASH_REMATCH[1]} key=${BASH_REMATCH[2]}
+      if [[ -n ${!key:-} ]]; then line="$indent$key=\"${!key}\""; fi
+    fi
+    printf '%s\n' "$line"
+  done < "$1"
+}
+
+# report_keys FILE: say which KEY="..." lines will be filled from the environment and which stay empty.
+report_keys() {
+  local key filled="" empty=""
+  while IFS= read -r key; do
+    if [[ -n ${!key:-} ]]; then filled="$filled $key"; else empty="$empty $key"; fi
+  done < <(sed -n 's/^[[:space:]]*\([A-Z_][A-Z0-9_]*\)=".*/\1/p' "$1")
+  echo "Filled in from your environment:${filled:- nothing}"
+  [[ -z $empty ]] || echo "Left as in the file:$empty"
+}
+
+local_timezone() {
+  local zone
+  zone=$(readlink /etc/localtime 2>/dev/null | sed -n 's|.*zoneinfo/||p')
+  echo "${zone:-UTC}"
+}
+
+# ts_authkey NAME [TAG]: a single-use, pre-approved key that expires in an hour.
+ts_authkey() {
+  local tags='[]'
+  [[ -z ${2:-} ]] || tags=$(jq -nc --arg t "tag:$2" '[$t]')
+  ts_api POST /tailnet/-/keys "$(jq -nc --arg d "box new $1" --argjson tags "$tags" '{
+    description: $d, expirySeconds: 3600,
+    capabilities: {devices: {create: {reusable: false, ephemeral: false, preauthorized: true, tags: $tags}}}}')" \
+    | jq -r .key
+}
+
+# wait_for_tailnet NAME: poll until the box joins, up to 20 minutes.
+wait_for_tailnet() {
+  local _
+  for _ in $(seq 80); do
+    [[ -z $(tailnet_ids "$1") ]] || return 0
+    sleep 15
+  done
+  return 1
+}
+
+cmd_new() {
+  local name="" tag="" user_data="$REPO/cloud-init.yaml" body id
+  while (( $# )); do
+    case $1 in
+      --size) BOX_SIZE=$2; shift ;;
+      --region) BOX_REGION=$2; shift ;;
+      --tag) tag=$2; shift ;;
+      --user-data) user_data=$2; shift ;;
+      -h|--help) usage; exit 0 ;;
+      -*) die "Unknown option: $1" ;;
+      *) name=$1 ;;
+    esac
+    shift
+  done
+  [[ -n $name ]] || { usage; exit 1; }
+  valid_name "$name"
+  [[ -f $user_data ]] || die "No user data file: $user_data"
+  require
+
+  local existing
+  existing=$(droplet_ids "$name")
+  [[ -z $existing ]] || die "A droplet named $name already exists."
+  existing=$(tailnet_ids "$name")
+  [[ -z $existing ]] || die "$name is already on the tailnet. Remove it first: box destroy $name"
+
+  local me
+  me=$(id -un)
+  [[ $me =~ ^[a-z][a-z0-9_-]*$ ]] || me=dev
+  export NEW_USER="${NEW_USER:-$me}"
+  export GIT_NAME="${GIT_NAME:-$(git config user.name || true)}"
+  export GIT_EMAIL="${GIT_EMAIL:-$(git config user.email || true)}"
+  export TIMEZONE="${TIMEZONE:-$(local_timezone)}"
+
+  log "Making a Tailscale key for $name"
+  TS_AUTHKEY=$(ts_authkey "$name" "$tag")
+  export TS_AUTHKEY
+  report_keys "$user_data"
+
+  log "Creating $name ($BOX_SIZE in $BOX_REGION)"
+  body=$(jq -nc --arg name "$name" --arg region "$BOX_REGION" --arg size "$BOX_SIZE" --arg image "$BOX_IMAGE" \
+    --arg data "$(render "$user_data")" --arg tag "$tag" --arg box "$BOX_TAG" '{
+      name: $name, region: $region, size: $size, image: $image, user_data: $data,
+      tags: ([$box] + (if $tag == "" then [] else [$tag] end))}')
+  id=$(do_api POST /droplets "$body" | jq -r .droplet.id)
+  echo "Droplet $id. It installs on first boot, then reboots."
+
+  log "Waiting for $name to join the tailnet"
+  wait_for_tailnet "$name" || die "$name didn't join the tailnet in 20 minutes. Check the droplet's console, or: box destroy $name"
+  cat <<EOF
+
+$name is on the tailnet and still installing (about 15 minutes, then a reboot).
+  Follow it:  ssh $NEW_USER@$name tail -f /var/log/*-install.log
+  Then:       ssh $NEW_USER@$name
+EOF
+}
+
+cmd_destroy() {
+  local name="" yes="" droplets devices id
+  while (( $# )); do
+    case $1 in
+      --yes) yes=1 ;;
+      -*) die "Unknown option: $1" ;;
+      *) name=$1 ;;
+    esac
+    shift
+  done
+  [[ -n $name ]] || { usage; exit 1; }
+  valid_name "$name"
+  require
+
+  droplets=$(droplet_ids "$name")
+  devices=$(tailnet_ids "$name")
+  [[ -n $droplets$devices ]] || die "Nothing named $name, on DigitalOcean or the tailnet."
+  echo "Droplets: ${droplets:-none}"
+  echo "Tailnet devices: ${devices:-none}"
+  if [[ -z $yes ]]; then
+    local answer
+    read -r -p "Type $name to delete them: " answer
+    [[ $answer == "$name" ]] || die "Not deleted."
+  fi
+
+  for id in $droplets; do do_api DELETE "/droplets/$id" >/dev/null && echo "Deleted droplet $id"; done
+  for id in $devices; do ts_api DELETE "/device/$id" >/dev/null && echo "Removed tailnet device $id"; done
+}
+
+cmd_list() {
+  require
+  do_api GET "/droplets?tag_name=$BOX_TAG&per_page=200" | jq -r '
+    (["NAME", "SIZE", "REGION", "STATUS", "CREATED"] | @tsv),
+    (.droplets[] | [.name, .size_slug, .region.slug, .status, .created_at[0:10]] | @tsv)' | column -t
+}
+
+case ${1:-} in
+  new) shift; cmd_new "$@" ;;
+  destroy) shift; cmd_destroy "$@" ;;
+  list) shift; cmd_list "$@" ;;
+  -h|--help|help|"") usage ;;
+  *) die "Unknown command: $1 (new, destroy or list)" ;;
+esac

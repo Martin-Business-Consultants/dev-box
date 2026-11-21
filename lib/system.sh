@@ -1,6 +1,6 @@
 PACKAGES=(
   sudo curl ca-certificates gnupg git stow tmux mosh htop unzip xz-utils
-  ripgrep fd-find locales btop fastfetch
+  ripgrep fd-find jq locales btop fastfetch
   earlyoom systemd-zram-generator
   podman podman-docker uidmap passt dbus-user-session
   ufw fail2ban python3-systemd
