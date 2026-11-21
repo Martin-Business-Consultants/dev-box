@@ -1,22 +1,20 @@
-# Login user, SSH, fail2ban.
-
 step_user() {
   id "$NEW_USER" &>/dev/null || adduser --disabled-password --gecos "" "$NEW_USER"
   usermod -aG sudo "$NEW_USER"
   install_ssh_keys
 
   if [[ $SUDO_NOPASSWD == yes ]]; then
-    render sudoers/nopasswd "/etc/sudoers.d/90-$NEW_USER" 440
-    visudo -cf "/etc/sudoers.d/90-$NEW_USER"
+    local sudoers="/etc/sudoers.d/90-$NEW_USER"
+    render sudoers/nopasswd "$sudoers" 440
+    visudo -cf "$sudoers"
   fi
 
   passwd -l root
 }
 
-# Give NEW_USER an authorized key; refuse to continue without one, since the
-# sshd step disables passwords and root login.
+# The sshd step disables passwords and root login, so a key is mandatory.
 install_ssh_keys() {
-  local ssh_dir="/home/$NEW_USER/.ssh"
+  local ssh_dir="$USER_HOME/.ssh"
   local keys="$ssh_dir/authorized_keys"
 
   install -d -m 700 -o "$NEW_USER" -g "$NEW_USER" "$ssh_dir"

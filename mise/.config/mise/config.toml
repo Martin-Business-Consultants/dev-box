@@ -3,11 +3,8 @@ node = "latest"
 ruby = "latest"
 neovim = "latest"
 gh = "latest"
-# aqua = prebuilt binaries (mise runs npm with --ignore-scripts, which breaks
-# npm packages that download a binary in postinstall)
 "aqua:anomalyco/opencode" = "latest"
 "aqua:tree-sitter/tree-sitter" = "latest"
-# language servers for Neovim
 lua-language-server = "latest"
 "npm:typescript" = "latest"
 "npm:typescript-language-server" = "latest"
@@ -16,4 +13,4 @@ lua-language-server = "latest"
 "gem:ruby-lsp" = "latest"
 
 [settings]
-ruby.compile = false   # precompiled Ruby only; never fall back to ruby-build
+ruby.compile = false

@@ -1,0 +1,1 @@
+EARLYOOM_ARGS="-r 3600 --prefer ^(node|tsserver|ruby-lsp|lua-language-se)$ --avoid ^(sshd|tailscaled|systemd|systemd-journal|rex)$"

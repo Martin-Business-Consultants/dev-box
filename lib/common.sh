@@ -1,5 +1,3 @@
-# Shared helpers. Sourced by install.sh; expects $ROOT.
-
 log()  { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m!!  %s\033[0m\n' "$*" >&2; }
 die()  { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
@@ -12,7 +10,7 @@ in_list() {
   return 1
 }
 
-# ask VAR "Prompt": read a non-empty value from the terminal into VAR.
+# ask VAR PROMPT: read a non-empty value from the terminal into VAR.
 ask() {
   local var=$1 prompt=$2 value=""
   while [[ -z $value ]]; do
@@ -30,8 +28,7 @@ run_installer() {
   curl -fsSL "$1" | "${2:-sh}"
 }
 
-# render TEMPLATE DEST [MODE]: install system/TEMPLATE to DEST,
-# replacing every @VAR@ placeholder with the value of $VAR.
+# render TEMPLATE DEST [MODE]: install system/TEMPLATE to DEST, expanding @VAR@ to $VAR.
 render() {
   local src="$ROOT/system/$1" dest=$2 mode=${3:-644} content var
   content=$(<"$src")

@@ -1,6 +1,3 @@
-# Tailscale and firewall. The firewall step reads Tailscale's state, so it
-# always runs after the tailscale step and is safe to re-run on its own.
-
 tailscale_up() {
   has tailscale && tailscale status >/dev/null 2>&1
 }
@@ -24,6 +21,7 @@ step_tailscale() {
     || warn "Tailscale didn't connect; public SSH stays open. Retry: sudo ./install.sh tailscale firewall"
 }
 
+# Public SSH stays open unless Tailscale is up and TS_ONLY_SSH=yes.
 step_firewall() {
   ufw --force reset >/dev/null
   ufw default deny incoming

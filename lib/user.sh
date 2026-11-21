@@ -1,44 +1,34 @@
-# User environment: dotfiles (stow), mise tools, Claude Code, Neovim.
-# step_repo and load_git_identity run as root; the other steps run as NEW_USER.
+STOW_FLAT=(bash git mise)  # linked file by file, so ~/.config stays a real dir
+STOW_FOLDED=(nvim)         # linked as a whole dir, so vim.pack's lockfile lands in the repo
 
-STOW_FLAT=(bash git mise)  # files linked individually (~/.config stays a real dir)
-STOW_FOLDED=(nvim)         # dir linked whole, so vim.pack's lockfile lands in the repo
-
-user_dotfiles() { echo "/home/$NEW_USER/dotfiles"; }
-
-# Environment for --as-user runs.
+# sudo -u leaves these unset; `systemctl --user` (rex server install) needs them.
 user_env() {
-  DOTFILES="$HOME/dotfiles"
   export PATH="$HOME/.local/bin:$PATH"
   export MISE_YES=1
-  # sudo -u doesn't set these; `systemctl --user` (rex server install) needs them
   export XDG_RUNTIME_DIR="/run/user/$(id -u)"
   export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 }
 
-# Use GIT_NAME/GIT_EMAIL from env, else the user's existing config, else ask.
+# GIT_NAME/GIT_EMAIL come from env, else the user's existing config, else a prompt.
 load_git_identity() {
-  local existing="/home/$NEW_USER/.gitconfig.local"
-  if [[ -f $existing ]] && has git; then
-    : "${GIT_NAME:=$(git config -f "$existing" user.name || true)}"
-    : "${GIT_EMAIL:=$(git config -f "$existing" user.email || true)}"
+  if [[ -f $GIT_LOCAL ]] && has git; then
+    : "${GIT_NAME:=$(git config -f "$GIT_LOCAL" user.name || true)}"
+    : "${GIT_EMAIL:=$(git config -f "$GIT_LOCAL" user.email || true)}"
   fi
   [[ -n $GIT_NAME ]]  || ask GIT_NAME  "Git name (e.g. Jane Doe)"
   [[ -n $GIT_EMAIL ]] || ask GIT_EMAIL "Git email"
   [[ $GIT_EMAIL == *@*.* ]] || die "That doesn't look like an email: $GIT_EMAIL"
 }
 
-# Copy this repo into the user's home so stow links point at a user-owned copy.
+# Stow links must point at a user-owned copy of the repo.
 step_repo() {
-  local dest
-  dest=$(user_dotfiles)
-  if [[ $ROOT == "$dest" ]]; then
-    echo "Running from $dest already."
-  elif [[ -e $dest ]]; then
-    warn "$dest exists; leaving it alone."
+  if [[ $ROOT == "$DOTFILES" ]]; then
+    echo "Running from $DOTFILES already."
+  elif [[ -e $DOTFILES ]]; then
+    warn "$DOTFILES exists; leaving it alone."
   else
-    cp -a "$ROOT" "$dest"
-    chown -R "$NEW_USER:$NEW_USER" "$dest"
+    cp -a "$ROOT" "$DOTFILES"
+    chown -R "$NEW_USER:$NEW_USER" "$DOTFILES"
   fi
 }
 
@@ -46,33 +36,34 @@ step_dotfiles() {
   mkdir -p "$HOME/.config" "$HOME/.local/bin"
   ln -sf /usr/bin/fdfind "$HOME/.local/bin/fd"
 
-  if [[ -n ${GIT_NAME:-} ]]; then
-    git config -f "$HOME/.gitconfig.local" user.name "$GIT_NAME"
-    git config -f "$HOME/.gitconfig.local" user.email "$GIT_EMAIL"
+  if [[ -n $GIT_NAME ]]; then
+    git config -f "$GIT_LOCAL" user.name "$GIT_NAME"
+    git config -f "$GIT_LOCAL" user.email "$GIT_EMAIL"
   fi
   setup_gh_credentials
 
   backup_conflicts "${STOW_FLAT[@]}" "${STOW_FOLDED[@]}"
-  stow -d "$DOTFILES" -t "$HOME" --restow --no-folding "${STOW_FLAT[@]}"
-  stow -d "$DOTFILES" -t "$HOME" --restow "${STOW_FOLDED[@]}"
+  stow_packages --no-folding "${STOW_FLAT[@]}"
+  stow_packages "${STOW_FOLDED[@]}"
 }
 
-# Use gh as git's GitHub credential helper. Lives in ~/.gitconfig.local and
-# points at the mise shim, because `gh auth login` would otherwise write a
-# gh-version-specific path into the shared, stowed ~/.gitconfig.
+stow_packages() {
+  stow -d "$DOTFILES" -t "$HOME" --restow "$@"
+}
+
+# Kept out of the shared ~/.gitconfig, where `gh auth login` would write a
+# version-specific gh path; the mise shim survives gh upgrades.
 setup_gh_credentials() {
-  local local_cfg="$HOME/.gitconfig.local" host key
-  local helper="!$HOME/.local/share/mise/shims/gh auth git-credential"
+  local helper="!$HOME/.local/share/mise/shims/gh auth git-credential" host key
   for host in https://github.com https://gist.github.com; do
     key="credential.$host.helper"
-    git config -f "$local_cfg" --unset-all "$key" || true
-    git config -f "$local_cfg" --add "$key" ""   # clear inherited helpers
-    git config -f "$local_cfg" --add "$key" "$helper"
+    git config -f "$GIT_LOCAL" --unset-all "$key" || true
+    git config -f "$GIT_LOCAL" --add "$key" ""   # clear inherited helpers
+    git config -f "$GIT_LOCAL" --add "$key" "$helper"
   done
 }
 
-# Move real files that would block stow (e.g. Debian's default ~/.bashrc)
-# to *.bak. Skips anything that already resolves into the repo.
+# Move real files that would block stow (e.g. Debian's default ~/.bashrc) to *.bak.
 backup_conflicts() {
   local pkg file target
   for pkg in "$@"; do
@@ -97,8 +88,7 @@ step_claude() {
   has claude || run_installer https://claude.ai/install.sh bash
 }
 
-# Install plugins (vim.pack runs on startup) and compile treesitter parsers.
-# One compile at a time: parallel builds get OOM-killed on 1GB boxes.
+# One parser compile at a time: parallel builds get OOM-killed on 1GB boxes.
 step_neovim() {
   mise exec -- nvim --headless \
     "+lua require('nvim-treesitter').install(vim.g.ts_langs, { max_jobs = 1 }):wait(1800000)" +qa \
