@@ -11,13 +11,20 @@ user_env() {
 
 # GIT_NAME/GIT_EMAIL come from env, else the user's existing config, else a prompt.
 load_git_identity() {
-  if [[ -f $GIT_LOCAL ]] && has git; then
-    : "${GIT_NAME:=$(git config -f "$GIT_LOCAL" user.name || true)}"
-    : "${GIT_EMAIL:=$(git config -f "$GIT_LOCAL" user.email || true)}"
-  fi
+  : "${GIT_NAME:=$(user_git_config user.name)}"
+  : "${GIT_EMAIL:=$(user_git_config user.email)}"
   [[ -n $GIT_NAME ]]  || ask GIT_NAME  "Git name (e.g. Jane Doe)"
   [[ -n $GIT_EMAIL ]] || ask GIT_EMAIL "Git email"
   [[ $GIT_EMAIL == *@*.* ]] || die "That doesn't look like an email: $GIT_EMAIL"
+}
+
+# user_git_config KEY: the user's value as git sees it (~/.gitconfig and its includes),
+# else from ~/.gitconfig.local, which isn't included until the dotfiles are stowed.
+user_git_config() {
+  has git || return 0
+  HOME="$USER_HOME" git config --global --get "$1" \
+    || git config -f "$GIT_LOCAL" --get "$1" 2>/dev/null \
+    || true
 }
 
 # Stow links must point at a user-owned copy of the repo.
