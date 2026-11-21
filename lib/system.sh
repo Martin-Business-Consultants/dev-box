@@ -17,9 +17,8 @@ step_preflight() {
 }
 
 step_packages() {
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get update -y
-  apt-get -o Dpkg::Options::="--force-confold" full-upgrade -y
+  apt_get update -y
+  apt_get -o Dpkg::Options::="--force-confold" full-upgrade -y
   apt_install "${PACKAGES[@]}"
   install -D -m 644 /dev/null /etc/containers/nodocker  # silence podman-docker's notice
 }

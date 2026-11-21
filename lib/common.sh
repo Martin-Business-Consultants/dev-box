@@ -10,17 +10,23 @@ in_list() {
   return 1
 }
 
-# ask VAR PROMPT: read a non-empty value from the terminal into VAR.
+# ask VAR PROMPT: read a non-empty value from the terminal into VAR. Fails with no terminal.
 ask() {
   local var=$1 prompt=$2 value=""
+  { : </dev/tty; } 2>/dev/null || return 1
   while [[ -z $value ]]; do
-    read -r -p "$prompt: " value </dev/tty || die "No TTY for prompt; set $var in env."
+    read -r -p "$prompt: " value </dev/tty || return 1
   done
   printf -v "$var" '%s' "$value"
 }
 
+# Waits for the apt lock, which Debian's own updates hold for a while after first boot.
+apt_get() {
+  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 "$@"
+}
+
 apt_install() {
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@"
+  apt_get install -y --no-install-recommends "$@"
 }
 
 # run_installer URL [SHELL]: pipe a vendor install script into a shell.

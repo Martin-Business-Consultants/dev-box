@@ -13,8 +13,13 @@ user_env() {
 load_git_identity() {
   : "${GIT_NAME:=$(user_git_config user.name)}"
   : "${GIT_EMAIL:=$(user_git_config user.email)}"
-  [[ -n $GIT_NAME ]]  || ask GIT_NAME  "Git name (e.g. Jane Doe)"
-  [[ -n $GIT_EMAIL ]] || ask GIT_EMAIL "Git email"
+  [[ -n $GIT_NAME ]]  || ask GIT_NAME  "Git name (e.g. Jane Doe)" || true
+  [[ -n $GIT_EMAIL ]] || ask GIT_EMAIL "Git email" || true
+  if [[ -z $GIT_NAME || -z $GIT_EMAIL ]]; then
+    warn "No git name and email, and no terminal to ask. Set GIT_NAME and GIT_EMAIL, or run the dotfiles step again later."
+    GIT_NAME="" GIT_EMAIL=""
+    return
+  fi
   [[ $GIT_EMAIL == *@*.* ]] || die "That doesn't look like an email: $GIT_EMAIL"
 }
 

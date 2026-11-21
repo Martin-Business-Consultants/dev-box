@@ -1,0 +1,19 @@
+#cloud-config
+# Paste into "User data" when creating a Debian 13 droplet, with the values filled in.
+# The install runs once on first boot, logs to /var/log/dev-box-install.log, then reboots.
+packages: [git]
+write_files:
+  - path: /root/dev-box.env
+    permissions: "0600"
+    content: |
+      NEW_USER="dev"
+      GIT_NAME="Jane Doe"
+      GIT_EMAIL="jane@example.com"
+      TS_AUTHKEY="tskey-auth-..."
+      TIMEZONE="UTC"
+runcmd:
+  - git clone https://github.com/Martin-Business-Consultants/dev-box /root/dev-box
+  - set -a; . /root/dev-box.env; set +a; /root/dev-box/install.sh > /var/log/dev-box-install.log 2>&1
+  - rm -f /root/dev-box.env
+power_state:
+  mode: reboot

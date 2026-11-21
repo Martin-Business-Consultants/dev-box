@@ -4,7 +4,31 @@ Turns a fresh Debian 13 VPS into a hardened remote dev box: Tailscale, Rex serve
 opencode, mise (Node + Ruby), and a Neovim 0.12 IDE built on `vim.pack` + mini.nvim.
 Dotfiles are managed with GNU stow.
 
-## Usage
+## Create a box with cloud-init
+
+The box sets itself up on first boot. You never log in as root, and once it's done the only way in
+is Tailscale.
+
+1. In Tailscale's admin console (Settings > Keys), make an auth key: pre-approved, single use,
+   expiring in a day.
+2. Copy [`cloud-init.yaml`](cloud-init.yaml) and fill in `NEW_USER`, `GIT_NAME`, `GIT_EMAIL` and
+   `TS_AUTHKEY`.
+3. Create a Debian 13 droplet with that file as its user data. In the control panel it's Advanced
+   Options > Add Initialization scripts; with the CLI:
+
+   ```bash
+   doctl compute droplet create my-dev --image debian-13-x64 --size s-1vcpu-1gb \
+     --region nyc3 --user-data-file cloud-init.yaml --wait
+   ```
+
+4. Wait for `my-dev` to appear in your tailnet. The install takes about 15 minutes on 1 GB, then the
+   box reboots. Connect with `ssh <user>@my-dev`, or add it in Rex.
+
+The droplet's name becomes its tailnet name. If it never joins the tailnet, destroy it and make
+another: with public SSH closed and no SSH key, there's no other way in. The droplet's metadata keeps
+the auth key, which is why it should be single use and short-lived.
+
+## Install by hand
 
 ```bash
 # from your Mac
@@ -49,6 +73,7 @@ User (`NEW_USER`): `dotfiles mise claude rex_server neovim versions`
 
 ```
 install.sh        entrypoint: config, step order, root/user dispatch
+cloud-init.yaml   user data that runs install.sh on a new droplet
 lib/              step functions, grouped by area
   common.sh       helpers: log, ask, render, run_installer…
   system.sh       packages, locale, timezone, swap, zram, earlyoom, sysctl, journald, auto-updates

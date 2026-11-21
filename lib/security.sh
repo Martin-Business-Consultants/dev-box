@@ -12,7 +12,8 @@ step_user() {
   passwd -l root
 }
 
-# The sshd step disables passwords and root login, so a key is mandatory.
+# Public SSH takes keys only, so it needs one. With TS_ONLY_SSH=yes, Tailscale SSH is the way in
+# and a key is optional.
 install_ssh_keys() {
   local ssh_dir="$USER_HOME/.ssh"
   local keys="$ssh_dir/authorized_keys"
@@ -23,7 +24,11 @@ install_ssh_keys() {
   elif [[ ! -s $keys && -s /root/.ssh/authorized_keys ]]; then
     cp /root/.ssh/authorized_keys "$keys"
   fi
-  [[ -s $keys ]] || die "No SSH key for $NEW_USER. Set SSH_PUBKEY."
+  if [[ ! -s $keys ]]; then
+    [[ $TS_ONLY_SSH == yes ]] || die "No SSH key for $NEW_USER. Set SSH_PUBKEY."
+    warn "No SSH key for $NEW_USER: only Tailscale SSH will reach this box."
+    return
+  fi
 
   chown "$NEW_USER:$NEW_USER" "$keys"
   chmod 600 "$keys"
